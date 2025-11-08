@@ -6,6 +6,7 @@ import com.example.security.mapper.UserMapper;
 import com.example.security.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.query.sqm.mutation.internal.cte.CteInsertStrategy;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,7 +18,7 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
-
+CteInsertStrategy
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_USER_CREATE')")
     public UserDto create(@RequestBody @Valid CreateUserRequest req){
