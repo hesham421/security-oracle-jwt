@@ -45,8 +45,10 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserAccount> listUsers(){
-        return repo.findAllByTenantId(requireTenant());
+    public java.util.List<com.example.security.dto.UserDto> listUsers(){
+        var users = repo.findAllByTenantId(requireTenant());
+        // map to DTOs while session is open to avoid LazyInitializationException
+        return users.stream().map(com.example.security.mapper.UserMapper::toDto).toList();
     }
 
     private String requireTenant() {

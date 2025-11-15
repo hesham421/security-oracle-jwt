@@ -28,6 +28,6 @@ public class UserController {
     @PreAuthorize("hasAuthority('PERM_USER_VIEW')")
     public List<UserDto> all(){
         System.out.println("inside all ::::::");
-        return userService.listUsers().stream().map(UserMapper::toDto).toList();
+        return userService.listUsers();
     }
 }

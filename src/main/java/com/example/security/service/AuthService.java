@@ -137,16 +137,16 @@ public class AuthService {
 
     @Transactional
     public void logout(HttpServletRequest request, HttpServletResponse response) {
-        try {
-            String raw = readRefreshCookie(request);
-            var claims = jwt.parse(raw).getBody();
-            String tenant = String.valueOf(claims.get("tenant"));
-            String jti = claims.getId();
+        // Let exceptions propagate so the global `ApiErrors` handler can map them to structured responses.
+        String raw = readRefreshCookie(request);
+        var claims = jwt.parse(raw).getBody();
+        String tenant = String.valueOf(claims.get("tenant"));
+        String jti = claims.getId();
 
+        try {
             TenantContext.setTenantId(tenant);
             refreshTokenRepo.findByJtiAndTenantId(jti, tenant)
                     .ifPresent(rt -> { rt.setRevoked(true); refreshTokenRepo.save(rt); });
-        } catch (Exception ignored) {
         } finally {
             TenantContext.clear();
             clearRefreshCookie(response);
