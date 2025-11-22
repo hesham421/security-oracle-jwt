@@ -31,12 +31,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+        boolean tenantSet = false;
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
             try {
                 String tenant = jwtService.extractTenant(token);
                 if (tenant != null && !tenant.isBlank()) {
                     TenantContext.setTenantId(tenant);
+                    tenantSet = true;
                 }
                 String username = jwtService.extractUsername(token);
                 if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -46,13 +48,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             } catch (Exception ex) {
-                // don't silently swallow errors - log for diagnostics and ensure tenant context isn't left stale
+                // don't silently swallow errors - log for diagnostics
                 log.warn("JWT authentication failed: {}", ex.toString());
                 log.debug("Full stacktrace:", ex);
-                try { TenantContext.clear(); } catch (Exception e) { log.debug("Error clearing TenantContext", e); }
             }
         }
 
-        chain.doFilter(request, response);
+        try {
+            chain.doFilter(request, response);
+        } finally {
+            if (tenantSet) {
+                try { TenantContext.clear(); } catch (Exception e) { log.debug("Error clearing TenantContext", e); }
+            }
+        }
     }
 }

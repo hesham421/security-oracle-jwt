@@ -21,7 +21,7 @@ public class UserController {
     @PostMapping
     @PreAuthorize("hasAuthority('PERM_USER_CREATE')")
     public UserDto create(@RequestBody @Valid CreateUserRequest req){
-        return UserMapper.toDto(userService.createUser(req));
+        return userService.createUser(req);
     }
 
     @GetMapping

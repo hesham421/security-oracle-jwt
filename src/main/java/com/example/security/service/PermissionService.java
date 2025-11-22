@@ -1,8 +1,10 @@
 package com.example.security.service;
 
+import com.example.security.common.LocalizedException;
 import com.example.security.domain.Permission;
 import com.example.security.dto.CreatePermissionRequest;
 import com.example.security.multitenancy.TenantContext;
+import com.example.security.common.TenantHelper;
 import com.example.security.repo.PermissionRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -18,10 +20,10 @@ public class PermissionService {
 
     @Transactional
     public Permission createPermission(CreatePermissionRequest req) {
-        String tenant = requireTenant();
+        String tenant = TenantHelper.requireTenant();
         // تحقق من عدم التكرار داخل نفس الـtenant
         permRepo.findByNameAndTenantId(req.getName(), tenant).ifPresent(p -> {
-            throw new IllegalArgumentException("Permission already exists in tenant: " + req.getName());
+            throw new LocalizedException(org.springframework.http.HttpStatus.BAD_REQUEST, "PERMISSION_ALREADY_EXISTS", req.getName());
         });
         Permission p = Permission.builder()
                 .tenantId(tenant)
@@ -31,22 +33,15 @@ public class PermissionService {
     }
 
     public List<Permission> listPermissions() {
-        return permRepo.findAllByTenantId(requireTenant());
+        return permRepo.findAllByTenantId(TenantHelper.requireTenant());
     }
 
     @Transactional
     public void deletePermission(Long id) {
-        long deleted = permRepo.deleteByIdAndTenantId(id, requireTenant());
+        long deleted = permRepo.deleteByIdAndTenantId(id, TenantHelper.requireTenant());
         if (deleted == 0) {
-            throw new IllegalArgumentException("Permission not found for current tenant");
+            throw new LocalizedException(org.springframework.http.HttpStatus.BAD_REQUEST, "PERMISSION_NOT_FOUND_FOR_TENANT", id);
         }
     }
-
-    private String requireTenant() {
-        String t = TenantContext.getTenantId();
-        if (t == null || t.isBlank()) {
-            throw new IllegalStateException("Missing tenant in context");
-        }
-        return t;
-    }
+    // tenant checking delegated to TenantHelper
 }

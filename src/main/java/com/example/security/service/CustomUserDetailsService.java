@@ -23,11 +23,11 @@ public class CustomUserDetailsService implements UserDetailsService {
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         String tenant = TenantContext.getTenantId();
         if (tenant == null || tenant.isBlank()) {
-            throw new UsernameNotFoundException("Missing tenant for user lookup");
+            throw new UsernameNotFoundException("MISSING_TENANT");
         }
 
         UserAccount ua = userRepo.findByUsernameIgnoreCaseAndTenantId(username, tenant)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found for tenant"));
+                .orElseThrow(() -> new UsernameNotFoundException("USER_NOT_FOUND"));
 
         Set<String> authorities = new HashSet<>();
         authorities.addAll(ua.getRoles().stream().map(r -> r.getName()).collect(Collectors.toSet()));

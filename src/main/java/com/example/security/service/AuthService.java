@@ -1,8 +1,10 @@
 package com.example.security.service;
 
+import com.example.security.common.LocalizedException;
 import com.example.security.domain.RefreshToken;
 import com.example.security.domain.UserAccount;
 import com.example.security.multitenancy.TenantContext;
+import com.example.security.common.CookieUtils;
 import com.example.security.repo.RefreshTokenRepository;
 import com.example.security.repo.UserAccountRepository;
 import com.example.security.security.JwtService;
@@ -49,6 +51,8 @@ public class AuthService {
     private String defaultTenant;
     @Value("${app.tenant.header:X-Tenant-ID}")
     private String tenantHeader;
+    @Value("${security.jwt.cookie.samesite:Lax}")
+    private String cookieSameSite;
 
     public record Tokens(String access, long accessExpSeconds) {}
 
@@ -71,8 +75,8 @@ public class AuthService {
 
             // اربط التوكن بكـيان المستخدم
             UserAccount userEntity = userAccountRepo
-                    .findByUsernameIgnoreCaseAndTenantId(principal.getUsername(), tenant)
-                    .orElseThrow(() -> new IllegalStateException("User entity not found"));
+            .findByUsernameIgnoreCaseAndTenantId(principal.getUsername(), tenant)
+            .orElseThrow(() -> new LocalizedException(org.springframework.http.HttpStatus.BAD_REQUEST, "USER_NOT_FOUND"));
 
             refreshTokenRepo.save(RefreshToken.builder()
                     .jti(jti)
@@ -99,19 +103,19 @@ public class AuthService {
 
         TenantContext.setTenantId(tenant);
         try {
-            var db = refreshTokenRepo.findByJtiAndTenantId(jti, tenant)
-                    .orElseThrow(() -> new IllegalArgumentException("Refresh revoked"));
+        var db = refreshTokenRepo.findByJtiAndTenantId(jti, tenant)
+            .orElseThrow(() -> new LocalizedException(org.springframework.http.HttpStatus.BAD_REQUEST, "REFRESH_REVOKED"));
             if (db.isRevoked() || db.getExpiresAt().isBefore(Instant.now())) {
-                throw new IllegalArgumentException("Refresh expired or revoked");
+                throw new LocalizedException(org.springframework.http.HttpStatus.BAD_REQUEST, "REFRESH_EXPIRED_OR_REVOKED");
             }
 
             // أوقف القديم ودوّر الجديد
             db.setRevoked(true);
             refreshTokenRepo.save(db);
 
-            var userEntity = userAccountRepo
-                    .findByUsernameIgnoreCaseAndTenantId(username, tenant)
-                    .orElseThrow(() -> new IllegalStateException("User entity not found"));
+        var userEntity = userAccountRepo
+            .findByUsernameIgnoreCaseAndTenantId(username, tenant)
+            .orElseThrow(() -> new LocalizedException(org.springframework.http.HttpStatus.BAD_REQUEST, "USER_NOT_FOUND"));
 
             var user = userDetailsService.loadUserByUsername(username);
             var authorities = user.getAuthorities().stream().map(GrantedAuthority::getAuthority).toList();
@@ -159,30 +163,19 @@ public class AuthService {
     }
 
     private void attachRefreshCookie(HttpServletResponse response, String token) {
-        Cookie c = new Cookie("refresh_token", token);
-        c.setHttpOnly(true);
-        c.setSecure(cookieSecure);
-        c.setDomain(cookieDomain);
-        c.setPath(cookiePath);
-        c.setMaxAge((int) refreshExpSeconds);
-        response.addCookie(c);
+        // Use header-based Set-Cookie to include SameSite attribute (Cookie API lacks SameSite)
+    CookieUtils.addRefreshCookieToResponse(response, token, (int) refreshExpSeconds, cookieDomain, cookiePath, cookieSecure, com.example.security.common.SameSite.fromString(cookieSameSite));
     }
 
     private void clearRefreshCookie(HttpServletResponse response) {
-        Cookie c = new Cookie("refresh_token", "");
-        c.setHttpOnly(true);
-        c.setSecure(cookieSecure);
-        c.setDomain(cookieDomain);
-        c.setPath(cookiePath);
-        c.setMaxAge(0);
-        response.addCookie(c);
+    CookieUtils.clearRefreshCookieInResponse(response, cookieDomain, cookiePath, cookieSecure, com.example.security.common.SameSite.fromString(cookieSameSite));
     }
 
     private String readRefreshCookie(HttpServletRequest request) {
-        if (request.getCookies() == null) throw new IllegalArgumentException("No refresh cookie");
+    if (request.getCookies() == null) throw new LocalizedException(org.springframework.http.HttpStatus.BAD_REQUEST, "NO_REFRESH_COOKIE");
         for (Cookie c : request.getCookies()) {
             if ("refresh_token".equals(c.getName())) return c.getValue();
         }
-        throw new IllegalArgumentException("No refresh cookie");
+    throw new LocalizedException(org.springframework.http.HttpStatus.BAD_REQUEST, "NO_REFRESH_COOKIE");
     }
 }
